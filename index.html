@@ -775,18 +775,7 @@
 <!-- ========== レンジ表ページ ========== -->
 <div id="page-range" class="page active">
 
-  <!-- ① ストリート -->
-  <div class="card-section">
-    <label>ストリート</label>
-    <div class="street-tabs">
-      <button class="active" onclick="showStreet('preflop', this)">プリフロップ</button>
-      <button onclick="showStreet('flop', this)">フロップ</button>
-      <button onclick="showStreet('turn', this)">ターン</button>
-      <button onclick="showStreet('river', this)">リバー</button>
-    </div>
-  </div>
-
-  <!-- ② ポジション -->
+  <!-- ① ポジション -->
   <div class="card-section">
     <label>
       ポジション
@@ -799,6 +788,17 @@
       <button onclick="selectPosition('CO',this)">CO</button>
       <button onclick="selectPosition('BTN',this)">BTN</button>
       <button onclick="selectPosition('SB',this)">SB</button>
+    </div>
+  </div>
+
+  <!-- ② ストリート -->
+  <div class="card-section">
+    <label>ストリート</label>
+    <div class="street-tabs">
+      <button class="active" onclick="showStreet('preflop', this)">プリフロップ</button>
+      <button onclick="showStreet('flop', this)">フロップ</button>
+      <button onclick="showStreet('turn', this)">ターン</button>
+      <button onclick="showStreet('river', this)">リバー</button>
     </div>
   </div>
 
