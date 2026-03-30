@@ -1,0 +1,2148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ポーカーレンジ表</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    /* ヘッダー */
+    header {
+      background: #16213e;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #0f3460;
+    }
+    header h1 { font-size: 18px; font-weight: 700; color: #e94560; }
+
+    /* ナビゲーション */
+    nav {
+      display: flex;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+    }
+    nav button {
+      flex: 1;
+      padding: 12px 8px;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    nav button.active { color: #e94560; border-bottom-color: #e94560; }
+
+    /* ページ */
+    .page { display: none; padding: 16px; }
+    .page.active { display: block; }
+
+    /* ================= レンジ表ページ ================= */
+    .street-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .street-tabs button {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid #0f3460;
+      background: #16213e;
+      color: #aaa;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .street-tabs button.active {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+
+    /* ボードカード・自分のハンド 共通セクション */
+    .card-section {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .card-section > label {
+      font-size: 12px;
+      color: #888;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    /* カードスロット行 */
+    .slot-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* カードスロット */
+    .card-slot {
+      flex: 1;
+      min-width: 0;
+      aspect-ratio: 2/3;
+      max-height: 68px;
+      background: #0f3460;
+      border: 2px dashed #1a5276;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .card-slot.filled { border-style: solid; border-color: #2c5f8a; background: #0d2a45; }
+    .card-slot.active-slot { border-color: #e94560; background: #2a0f1e; }
+    .card-slot .slot-rank { font-size: 16px; font-weight: 800; line-height: 1; }
+    .card-slot .slot-suit { font-size: 11px; line-height: 1; margin-top: 1px; }
+    .card-slot .slot-empty { font-size: 16px; color: #2c5f8a; }
+    .card-slot.red .slot-rank, .card-slot.red .slot-suit { color: #e94560; }
+    .card-slot.black .slot-rank, .card-slot.black .slot-suit { color: #eee; }
+
+    /* 自分のハンドセクション */
+    .my-hand-row { display: flex; gap: 10px; align-items: center; }
+    .my-hand-slots { display: flex; gap: 6px; }
+    .my-hand-slots .card-slot { width: 44px; height: 60px; flex: none; }
+    .hand-name-badge { flex: 1; font-size: 22px; font-weight: 800; color: #e94560; letter-spacing: 0.04em; }
+    .hand-name-badge.empty { color: #333; font-size: 16px; }
+    .btn-clear-hand {
+      background: none; border: 1px solid #333; border-radius: 6px;
+      color: #666; font-size: 12px; padding: 4px 8px; cursor: pointer;
+    }
+
+    /* ハンドグリッド */
+    .hand-grid-container { overflow-x: auto; }
+    .hand-grid {
+      display: grid;
+      grid-template-columns: repeat(13, 1fr);
+      gap: 2px;
+      min-width: 300px;
+    }
+    .hand-cell {
+      aspect-ratio: 1;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      transition: transform 0.1s;
+      user-select: none;
+    }
+    .hand-cell:active { transform: scale(0.95); }
+    .hand-cell.pair { background: #1a3a5c; }
+    .hand-cell.disabled { opacity: 0.3; cursor: default; }
+
+    .action-bar {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+    .action-bar .fold  { background: rgba(80,80,80,0.7); }
+    .action-bar .call  { background: rgba(52,152,219,0.8); }
+    .action-bar .raise { background: rgba(231,76,60,0.8); }
+
+    .hand-label {
+      position: relative;
+      z-index: 1;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      font-size: 8px;
+      line-height: 1;
+      text-align: center;
+    }
+
+    .hand-cell.hand-highlight {
+      outline: 2px solid #f1c40f;
+      outline-offset: 1px;
+      z-index: 2;
+      box-shadow: 0 0 8px rgba(241,196,15,0.8);
+    }
+
+    /* 凡例 */
+    .legend { display: flex; gap: 12px; margin-top: 12px; font-size: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+    .legend-dot.raise { background: #e74c3c; }
+    .legend-dot.call  { background: #3498db; }
+    .legend-dot.fold  { background: #555; }
+
+    /* ボード未入力メッセージ */
+    .board-hint {
+      text-align: center;
+      padding: 12px;
+      color: #555;
+      font-size: 13px;
+    }
+
+    /* ================= カードピッカー（ボトムシート） ================= */
+    .picker-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 150;
+    }
+    .picker-overlay.open { display: block; }
+
+    .picker-sheet {
+      position: fixed;
+      bottom: -320px;
+      left: 0; right: 0;
+      background: #0f2240;
+      border-top: 1px solid #1a5276;
+      border-radius: 16px 16px 0 0;
+      padding: 14px 14px 32px;
+      z-index: 200;
+      transition: bottom 0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+    .picker-sheet.open { bottom: 0; }
+
+    .picker-step-label { font-size: 12px; color: #888; margin-bottom: 10px; }
+
+    .rank-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    .rank-btn {
+      padding: 9px 4px;
+      background: #16213e;
+      border: 1px solid #1a5276;
+      border-radius: 6px;
+      color: #ddd;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.1s;
+    }
+    .rank-btn.selected { background: #e94560; border-color: #e94560; color: #fff; }
+    .rank-btn:active { opacity: 0.7; }
+
+    .suit-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+    }
+    .suit-btn {
+      padding: 11px 4px;
+      background: #16213e;
+      border: 1px solid #1a5276;
+      border-radius: 6px;
+      font-size: 22px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.1s;
+    }
+    .suit-btn.red-suit   { color: #e94560; }
+    .suit-btn.black-suit { color: #eee; }
+    .suit-btn.selected   { border-color: #e94560; background: #2a0f1e; }
+    .suit-btn:active     { opacity: 0.7; }
+    .suit-btn.disabled   { opacity: 0.25; pointer-events: none; }
+
+    /* ================= プリセット ================= */
+    .preset-block {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .preset-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .preset-label {
+      font-size: 12px;
+      color: #888;
+      min-width: 52px;
+      padding-top: 7px;
+    }
+    .preset-toggle-group {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .preset-toggle-group button {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #1a5276;
+      background: #0f3460;
+      color: #aaa;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-toggle-group button.active {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+    .btn-apply-preset {
+      width: 100%;
+      padding: 13px;
+      background: #0f3460;
+      border: 1px solid #1a5276;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background 0.15s;
+    }
+    .btn-apply-preset:active { background: #1a4a6e; }
+
+    /* ヘルプアイコン */
+    .help-icon {
+      background: none;
+      border: 1px solid #1a5276;
+      border-radius: 50%;
+      color: #5dade2;
+      font-size: 11px;
+      font-weight: 700;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      vertical-align: middle;
+      margin-left: 5px;
+      line-height: 1;
+    }
+    .help-icon:active { background: #1a4a6e; }
+
+    /* ポジション説明ダイアログ */
+    .info-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .info-overlay.open { display: flex; }
+    .info-dialog {
+      background: #16213e;
+      border-radius: 14px;
+      padding: 20px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .info-dialog h4 {
+      font-size: 14px;
+      color: #e94560;
+      margin-bottom: 14px;
+    }
+    .info-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    .info-pos-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #eee;
+      min-width: 36px;
+    }
+    .info-pos-desc {
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.5;
+    }
+    .info-close {
+      width: 100%;
+      margin-top: 16px;
+      padding: 11px;
+      background: #0f3460;
+      border: 1px solid #1a5276;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* プリセット手数バッジ */
+    .preset-info {
+      font-size: 11px;
+      color: #888;
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    /* ================= レンジ編集モーダル ================= */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #16213e;
+      border-radius: 16px 16px 0 0;
+      padding: 20px 16px 32px;
+      width: 100%;
+      max-width: 480px;
+    }
+    .modal h3 { font-size: 16px; margin-bottom: 16px; color: #e94560; }
+    .modal-close {
+      float: right;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .slider-group { margin-bottom: 14px; }
+    .slider-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .slider-group label span { color: #e94560; font-weight: 700; }
+    input[type=range] { width: 100%; accent-color: #e94560; }
+
+    .action-preview {
+      display: flex;
+      height: 20px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+    .action-preview .raise { background: #e74c3c; transition: flex 0.2s; }
+    .action-preview .call  { background: #3498db; transition: flex 0.2s; }
+    .action-preview .fold  { background: #555;    transition: flex 0.2s; }
+
+    .btn-save {
+      width: 100%;
+      margin-top: 16px;
+      padding: 14px;
+      background: #e94560;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* ================= 履歴記録モーダル ================= */
+    .rec-street-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .rec-street-tabs button {
+      flex: 1;
+      padding: 7px 4px;
+      background: #0f3460;
+      border: 1px solid #1a5276;
+      border-radius: 8px;
+      color: #aaa;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .rec-street-tabs button.active {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+
+    .rec-section-label {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .rec-cards-row { display: flex; gap: 6px; margin-bottom: 14px; }
+    .rec-cards-row .card-slot { flex: none; width: 44px; height: 60px; }
+
+    .rec-board-section { margin-bottom: 14px; }
+
+    /* アクション選択ボタン */
+    .action-btns { display: flex; gap: 8px; margin-bottom: 16px; }
+    .action-btn {
+      flex: 1;
+      padding: 14px 4px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .action-btn.fold  { background: #222; border-color: #444; color: #888; }
+    .action-btn.call  { background: #0d2a45; border-color: #1a5276; color: #5dade2; }
+    .action-btn.raise { background: #2a0f1e; border-color: #5c1a1a; color: #e74c3c; }
+    .action-btn.fold.selected  { background: #444; border-color: #888; color: #eee; }
+    .action-btn.call.selected  { background: #1a4a6e; border-color: #3498db; color: #fff; }
+    .action-btn.raise.selected { background: #5c1a1a; border-color: #e74c3c; color: #fff; }
+
+    /* ================= 履歴ページ ================= */
+    .history-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .btn-add {
+      flex: 1;
+      padding: 12px;
+      background: #e94560;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .history-list { display: flex; flex-direction: column; gap: 10px; }
+    .history-card {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 14px;
+      border-left: 4px solid #0f3460;
+    }
+    .history-card.fold  { border-left-color: #555; }
+    .history-card.call  { border-left-color: #3498db; }
+    .history-card.raise { border-left-color: #e74c3c; }
+
+    .history-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .history-hand { font-size: 16px; font-weight: 700; }
+    .history-action {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 700;
+    }
+    .history-action.fold  { background: #333; color: #aaa; }
+    .history-action.call  { background: #1a4a6e; color: #5dade2; }
+    .history-action.raise { background: #5c1a1a; color: #e74c3c; }
+
+    .history-meta { font-size: 12px; color: #888; }
+    .history-cards-row { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+    .mini-card {
+      background: #0f3460;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .mini-card.red { color: #e94560; }
+    .mini-card.board { background: #162540; border: 1px solid #1a5276; }
+
+    .btn-del-entry {
+      background: none;
+      border: none;
+      color: #444;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 0 0 8px;
+      line-height: 1;
+    }
+    .btn-del-entry:active { color: #e94560; }
+
+    .empty-state { text-align: center; padding: 48px 16px; color: #555; font-size: 14px; }
+
+    /* ================= インライン記録ボタン ================= */
+    .inline-record {
+      display: none;
+      margin-top: 10px;
+      gap: 6px;
+    }
+    .inline-record.visible { display: flex; }
+    .inline-rec-btn {
+      flex: 1;
+      padding: 10px 4px;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: opacity 0.1s;
+    }
+    .inline-rec-btn:active { opacity: 0.7; }
+    .inline-rec-btn.fold  { background: #222; border-color: #444; color: #888; }
+    .inline-rec-btn.call  { background: #0d2a45; border-color: #1a5276; color: #5dade2; }
+    .inline-rec-btn.raise { background: #2a0f1e; border-color: #5c1a1a; color: #e74c3c; }
+
+    /* トースト通知 */
+    .toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #16213e;
+      border: 1px solid #1a5276;
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-size: 13px;
+      color: #eee;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 400;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ================= 設定ページ ================= */
+    .settings-section { margin-bottom: 24px; }
+    .settings-section h3 { font-size: 14px; color: #888; margin-bottom: 10px; letter-spacing: 0.05em; }
+    .settings-item {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .settings-item span { font-size: 14px; }
+    .settings-item .sub { font-size: 12px; color: #888; margin-top: 2px; }
+    .btn-danger {
+      width: 100%;
+      padding: 14px;
+      background: none;
+      border: 1px solid #e94560;
+      border-radius: 10px;
+      color: #e94560;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* ================= 表示モード切替バー ================= */
+    .display-mode-bar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 8px 4px;
+      background: #16213e;
+      border: 1px solid #1a5276;
+      border-radius: 8px;
+      color: #888;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mode-btn.active { background: #e94560; border-color: #e94560; color: #fff; }
+
+    /* ================= テクスチャバッジ ================= */
+    .texture-section {
+      display: none;
+      background: #16213e;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .texture-section-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #888;
+    }
+    .texture-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+    .texture-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #0f3460;
+      border: 1px solid #1a5276;
+      color: #aaa;
+    }
+    .texture-badge.suit-mono   { background: #1a0a2e; border-color: #7b2fbe; color: #d4a8ff; }
+    .texture-badge.suit-two    { background: #0a1a2e; border-color: #1a5276; color: #7dc8e8; }
+    .texture-badge.suit-rainbow{ background: #0a1a0a; border-color: #2d6a1a; color: #9be87d; }
+    .texture-badge.conn-high   { background: #2a1a0a; border-color: #7a4a1a; color: #f0b060; }
+    .texture-badge.conn-mid    { background: #1a1a2a; border-color: #3a3a6a; color: #9090d0; }
+    .texture-badge.paired      { background: #2a0f1e; border-color: #5c1a1a; color: #e07070; }
+    .texture-badge.high-card   { background: #162520; border-color: #1a5c2e; color: #70e0a0; }
+
+    /* ================= カテゴリーモード ================= */
+    .hand-cell.cat-set       { background: #5a0a0a !important; }
+    .hand-cell.cat-twopair   { background: #4a2a0a !important; }
+    .hand-cell.cat-overpair  { background: #3a0a30 !important; }
+    .hand-cell.cat-toppair   { background: #1a3a0a !important; }
+    .hand-cell.cat-midpair   { background: #0a3a20 !important; }
+    .hand-cell.cat-botpair   { background: #0a2a3a !important; }
+    .hand-cell.cat-underpair { background: #1a1a3a !important; }
+    .hand-cell.cat-flushdraw { background: #0a0a4a !important; }
+    .hand-cell.cat-oesd      { background: #3a3a0a !important; }
+    .hand-cell.cat-gutshot   { background: #2a2a0a !important; }
+    .hand-cell.cat-overcards { background: #2a0a3a !important; }
+    .hand-cell.cat-air       { background: #111 !important; }
+
+    .cat-legend {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .cat-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: #aaa;
+    }
+    .cat-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ================= 統計モード ================= */
+    .stats-count {
+      position: absolute;
+      top: 1px;
+      right: 2px;
+      font-size: 6px;
+      color: rgba(255,255,255,0.7);
+      z-index: 2;
+      font-weight: 700;
+    }
+    .hand-cell.no-data { opacity: 0.2; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🃏 PokerRange</h1>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('range', this)">レンジ表</button>
+  <button onclick="showPage('history', this)">ハンド履歴</button>
+  <button onclick="showPage('settings', this)">設定</button>
+</nav>
+
+<!-- ========== レンジ表ページ ========== -->
+<div id="page-range" class="page active">
+
+  <!-- ① ストリート -->
+  <div class="card-section">
+    <label>ストリート</label>
+    <div class="street-tabs">
+      <button class="active" onclick="showStreet('preflop', this)">プリフロップ</button>
+      <button onclick="showStreet('flop', this)">フロップ</button>
+      <button onclick="showStreet('turn', this)">ターン</button>
+      <button onclick="showStreet('river', this)">リバー</button>
+    </div>
+  </div>
+
+  <!-- ② ポジション -->
+  <div class="card-section">
+    <label>
+      ポジション
+      <button class="help-icon" onclick="openPositionHelp()">?</button>
+      <span style="font-size:11px;color:#555;font-weight:400;margin-left:4px;">選択でプリセット自動適用</span>
+    </label>
+    <div class="preset-toggle-group" id="position-selector">
+      <button onclick="selectPosition('UTG',this)">UTG</button>
+      <button onclick="selectPosition('MP',this)">MP</button>
+      <button onclick="selectPosition('CO',this)">CO</button>
+      <button onclick="selectPosition('BTN',this)">BTN</button>
+      <button onclick="selectPosition('SB',this)">SB</button>
+    </div>
+  </div>
+
+  <!-- ③ ハンド + ボードカード -->
+  <div class="card-section">
+    <label>自分のハンド</label>
+    <div class="my-hand-row">
+      <div class="my-hand-slots">
+        <div class="card-slot" id="hand-slot-0" onclick="openPickerFor('hand',0)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="hand-slot-1" onclick="openPickerFor('hand',1)"><span class="slot-empty">＋</span></div>
+      </div>
+      <div class="hand-name-badge empty" id="hand-name-badge">— </div>
+      <button class="btn-clear-hand" id="btn-clear-hand" onclick="clearHand()" style="display:none;">クリア</button>
+    </div>
+
+    <!-- ボードカード（フロップ以降） -->
+    <div id="board-section" style="display:none; margin-top:12px;">
+      <label style="font-size:12px;color:#888;display:block;margin-bottom:8px;">ボードカード</label>
+      <div class="slot-row" id="board-slot-row">
+        <div class="card-slot" id="slot-0" onclick="openPickerFor('board',0)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="slot-1" onclick="openPickerFor('board',1)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="slot-2" onclick="openPickerFor('board',2)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="slot-3" onclick="openPickerFor('board',3)" style="display:none;"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="slot-4" onclick="openPickerFor('board',4)" style="display:none;"><span class="slot-empty">＋</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ アクション（ホールカード入力後に表示） -->
+  <div class="inline-record" id="inline-record">
+    <button class="inline-rec-btn fold"  onclick="recordInline('fold')">フォールド</button>
+    <button class="inline-rec-btn call"  onclick="recordInline('call')">コール</button>
+    <button class="inline-rec-btn raise" onclick="recordInline('raise')">レイズ</button>
+  </div>
+
+  <!-- テクスチャ分析（フロップ以降） -->
+  <div class="texture-section" id="texture-section">
+    <div class="texture-section-header">
+      <span>ボードテクスチャ</span>
+      <button class="help-icon" onclick="openTextureHelp()">?</button>
+    </div>
+    <div class="texture-badges" id="texture-badges"></div>
+  </div>
+
+  <!-- 表示モード切替 -->
+  <div class="display-mode-bar">
+    <button class="mode-btn active" onclick="setDisplayMode('range',this)">レンジ</button>
+    <button class="mode-btn" onclick="setDisplayMode('category',this)">カテゴリー</button>
+    <button class="mode-btn" onclick="setDisplayMode('stats',this)">統計</button>
+    <button class="help-icon" style="margin-left:2px;" onclick="openModeHelp()">?</button>
+  </div>
+
+  <!-- レンジグリッド -->
+  <div class="hand-grid-container">
+    <div class="hand-grid" id="hand-grid"></div>
+  </div>
+  <div id="board-hint" class="board-hint" style="display:none;">ボードカードをすべて入力するとレンジが表示されます</div>
+
+  <div class="legend" id="range-legend">
+    <div class="legend-item"><div class="legend-dot raise"></div>レイズ</div>
+    <div class="legend-item"><div class="legend-dot call"></div>コール</div>
+    <div class="legend-item"><div class="legend-dot fold"></div>フォールド</div>
+  </div>
+
+  <div class="cat-legend" id="cat-legend">
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#5a0a0a;"></div>セット</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#4a2a0a;"></div>ツーペア</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#3a0a30;"></div>オーバーペア</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#1a3a0a;"></div>トップペア</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#0a3a20;"></div>ミドルペア</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#0a2a3a;"></div>ボトムペア</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#1a1a3a;"></div>アンダーペア</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#0a0a4a;"></div>FD</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#3a3a0a;"></div>OESD</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#2a2a0a;"></div>ガットショット</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#2a0a3a;"></div>オーバーカード</div>
+    <div class="cat-legend-item"><div class="cat-dot" style="background:#111;border:1px solid #333;"></div>エア</div>
+  </div>
+</div>
+
+<!-- ========== 履歴ページ ========== -->
+<div id="page-history" class="page">
+  <div class="history-toolbar">
+    <button class="btn-add" onclick="openRecModal()">+ ハンドを記録</button>
+  </div>
+  <div class="history-list" id="history-list">
+    <div class="empty-state">記録がありません</div>
+  </div>
+</div>
+
+<!-- ========== 設定ページ ========== -->
+<div id="page-settings" class="page">
+
+  <!-- プリフロップ プリセット -->
+  <div class="settings-section">
+    <h3>プリフロップ プリセット</h3>
+    <div class="preset-block">
+      <div class="preset-row">
+        <span class="preset-label">戦略</span>
+        <div class="preset-toggle-group" id="preset-strategy">
+          <button onclick="selectStrategy('TAG',this)">TAG</button>
+          <button class="active" onclick="selectStrategy('GTO',this)">GTO</button>
+        </div>
+      </div>
+      <div class="preset-info" id="preset-info" style="text-align:left;margin-top:0;">
+        ポジションはレンジ表の「自分のハンド」欄で選択できます
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3>データ</h3>
+    <div class="settings-item" onclick="exportData()">
+      <div>
+        <div>エクスポート</div>
+        <div class="sub">JSONファイルとして保存</div>
+      </div>
+      <span style="color:#888;font-size:20px;">›</span>
+    </div>
+    <div class="settings-item" onclick="document.getElementById('import-file').click()">
+      <div>
+        <div>インポート</div>
+        <div class="sub">JSONファイルから読み込み</div>
+      </div>
+      <span style="color:#888;font-size:20px;">›</span>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)">
+    <button class="btn-danger" onclick="clearAllData()">すべてのデータを削除</button>
+  </div>
+</div>
+
+<!-- ========== レンジ編集モーダル ========== -->
+<div class="modal-overlay" id="modal" onclick="closeRangeModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeRangeModal()">✕</button>
+    <h3 id="modal-hand-name">AAs</h3>
+
+    <div class="slider-group">
+      <label>レイズ <span id="raise-val">0</span>%</label>
+      <input type="range" id="raise-slider" min="0" max="100" value="0" oninput="updateSliders('raise')">
+    </div>
+    <div class="slider-group">
+      <label>コール <span id="call-val">0</span>%</label>
+      <input type="range" id="call-slider" min="0" max="100" value="0" oninput="updateSliders('call')">
+    </div>
+    <div class="slider-group">
+      <label>フォールド <span id="fold-val">100</span>%</label>
+      <input type="range" id="fold-slider" min="0" max="100" value="100" oninput="updateSliders('fold')">
+    </div>
+
+    <div class="action-preview" id="action-preview">
+      <div class="raise" style="flex:0"></div>
+      <div class="call"  style="flex:0"></div>
+      <div class="fold"  style="flex:100"></div>
+    </div>
+
+    <button class="btn-save" onclick="saveRangeHand()">保存</button>
+  </div>
+</div>
+
+<!-- ========== 履歴記録モーダル ========== -->
+<div class="modal-overlay" id="rec-modal" onclick="closeRecModal(event)">
+  <div class="modal" style="max-height:90vh;overflow-y:auto;">
+    <button class="modal-close" onclick="closeRecModal()">✕</button>
+    <h3 style="margin-bottom:14px;">ハンドを記録</h3>
+
+    <!-- ストリート選択 -->
+    <div class="rec-section-label">ストリート</div>
+    <div class="rec-street-tabs">
+      <button class="active" onclick="setRecStreet('preflop', this)">プリフロップ</button>
+      <button onclick="setRecStreet('flop', this)">フロップ</button>
+      <button onclick="setRecStreet('turn', this)">ターン</button>
+      <button onclick="setRecStreet('river', this)">リバー</button>
+    </div>
+
+    <!-- ホールカード -->
+    <div class="rec-section-label">ホールカード</div>
+    <div class="rec-cards-row" style="margin-bottom:14px;">
+      <div class="card-slot" id="rhand-slot-0" onclick="openPickerFor('rec-hand',0)"><span class="slot-empty">＋</span></div>
+      <div class="card-slot" id="rhand-slot-1" onclick="openPickerFor('rec-hand',1)"><span class="slot-empty">＋</span></div>
+    </div>
+
+    <!-- ボードカード -->
+    <div id="rec-board-section" style="display:none;">
+      <div class="rec-section-label">ボードカード</div>
+      <div class="slot-row" style="margin-bottom:14px;" id="rec-board-slot-row">
+        <div class="card-slot" id="rslot-0" onclick="openPickerFor('rec-board',0)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="rslot-1" onclick="openPickerFor('rec-board',1)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="rslot-2" onclick="openPickerFor('rec-board',2)"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="rslot-3" onclick="openPickerFor('rec-board',3)" style="display:none;"><span class="slot-empty">＋</span></div>
+        <div class="card-slot" id="rslot-4" onclick="openPickerFor('rec-board',4)" style="display:none;"><span class="slot-empty">＋</span></div>
+      </div>
+    </div>
+
+    <!-- アクション -->
+    <div class="rec-section-label">実際のアクション</div>
+    <div class="action-btns">
+      <button class="action-btn fold"  onclick="selectRecAction('fold',  this)">フォールド</button>
+      <button class="action-btn call"  onclick="selectRecAction('call',  this)">コール</button>
+      <button class="action-btn raise" onclick="selectRecAction('raise', this)">レイズ</button>
+    </div>
+
+    <button class="btn-save" onclick="saveRecord()">保存</button>
+  </div>
+</div>
+
+<!-- トースト通知 -->
+<div class="toast" id="toast"></div>
+
+<!-- ========== ポジション説明ダイアログ ========== -->
+<div class="info-overlay" id="position-help-overlay" onclick="closePositionHelp(event)">
+  <div class="info-dialog">
+    <h4>ポジションとは？</h4>
+    <div class="info-row">
+      <span class="info-pos-label">UTG</span>
+      <span class="info-pos-desc">Under the Gun。最も早く行動する最も不利なポジション。厳選されたタイトなハンドでのみオープンが推奨される。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label">MP</span>
+      <span class="info-pos-desc">Middle Position。UTGより後に行動するため、やや広いレンジでオープンできる。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label">CO</span>
+      <span class="info-pos-desc">Cutoff。ボタンの右隣。後半の行動順で有利なため、比較的広いレンジでオープン可能。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label">BTN</span>
+      <span class="info-pos-desc">Button（ディーラー）。フロップ以降は常に最後に行動できる最も有利なポジション。最も広いレンジでオープンすべき。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label">SB</span>
+      <span class="info-pos-desc">Small Blind。プリフロップはBTNの後だが、フロップ以降は最初に行動する不利なポジション。</span>
+    </div>
+    <button class="info-close" onclick="closePositionHelp()">閉じる</button>
+  </div>
+</div>
+
+<!-- ========== 表示モード説明ダイアログ ========== -->
+<div class="info-overlay" id="mode-help-overlay" onclick="closeModeHelp(event)">
+  <div class="info-dialog">
+    <h4>表示モードについて</h4>
+    <div class="info-row">
+      <span class="info-pos-label" style="color:#e94560;">レンジ</span>
+      <span class="info-pos-desc">登録したアクション割合（レイズ/コール/フォールド）をカラーバーで表示。プリフロップのプリセット適用や、各ハンドのレンジ編集に使用します。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="color:#5dade2;">カテゴリー</span>
+      <span class="info-pos-desc">現在のボードに対して各ハンドがどのような強さになるかをカテゴリー別に色分けして表示。フロップ以降で有効です。自分のハンドを入力すると位置をハイライトできます。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="color:#f0b060;">統計</span>
+      <span class="info-pos-desc">過去に記録したハンド履歴から、同じストリート・ボードでの実際のアクション割合を集計して表示。記録が多いほど精度が上がります。数字は記録回数です。</span>
+    </div>
+    <button class="info-close" onclick="closeModeHelp()">閉じる</button>
+  </div>
+</div>
+
+<!-- ========== テクスチャバッジ説明ダイアログ ========== -->
+<div class="info-overlay" id="texture-help-overlay" onclick="closeTextureHelp(event)">
+  <div class="info-dialog">
+    <h4>ボードテクスチャとは？</h4>
+    <div class="info-row">
+      <span class="info-pos-label" style="font-size:11px;color:#d4a8ff;">モノトーン</span>
+      <span class="info-pos-desc">3枚すべて同じスーツ。フラッシュが成立済みまたは強いフラッシュドローが存在。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="font-size:11px;color:#7dc8e8;">ツートーン</span>
+      <span class="info-pos-desc">2枚が同じスーツ。フラッシュドローが存在するため、スーテッドハンドの価値が上がる。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="font-size:11px;color:#9be87d;">レインボー</span>
+      <span class="info-pos-desc">3枚すべて異なるスーツ。フラッシュドローがなく、ドライなボード。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="font-size:11px;color:#f0b060;">コネクテッド</span>
+      <span class="info-pos-desc">隣接するランクが多く、ストレートが完成しやすいボード。コネクタ系ハンドに有利。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="font-size:11px;color:#9090d0;">セミコネクテッド</span>
+      <span class="info-pos-desc">ある程度連続性のあるボード。ドロー系ハンドが存在する可能性あり。</span>
+    </div>
+    <div class="info-row">
+      <span class="info-pos-label" style="font-size:11px;color:#e07070;">ペアボード</span>
+      <span class="info-pos-desc">同じランクが2枚以上あるボード。フルハウスやクアッズの可能性があり、ブラフが通りにくくなる。</span>
+    </div>
+    <button class="info-close" onclick="closeTextureHelp()">閉じる</button>
+  </div>
+</div>
+
+<!-- ========== カードピッカー（ボトムシート・全コンテキスト共通） ========== -->
+<div class="picker-overlay" id="picker-overlay" onclick="closePicker()"></div>
+<div class="picker-sheet" id="picker-sheet">
+  <div class="picker-step-label" id="picker-label">ランクを選択</div>
+  <div class="rank-grid" id="rank-grid"></div>
+  <div class="suit-row" id="suit-row">
+    <button class="suit-btn black-suit" data-suit="♠" onclick="selectSuitFor('♠')">♠</button>
+    <button class="suit-btn red-suit"   data-suit="♥" onclick="selectSuitFor('♥')">♥</button>
+    <button class="suit-btn red-suit"   data-suit="♦" onclick="selectSuitFor('♦')">♦</button>
+    <button class="suit-btn black-suit" data-suit="♣" onclick="selectSuitFor('♣')">♣</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 定数
+// ============================================================
+const RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+const STORAGE_RANGE   = 'pokerrng_range';
+const STORAGE_HISTORY = 'pokerrng_history';
+
+// ============================================================
+// LocalStorage
+// ============================================================
+function loadRange() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_RANGE) || '{}'); }
+  catch { return {}; }
+}
+function saveRange(data) {
+  localStorage.setItem(STORAGE_RANGE, JSON.stringify(data));
+}
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_HISTORY) || '[]'); }
+  catch { return []; }
+}
+function saveHistory(data) {
+  localStorage.setItem(STORAGE_HISTORY, JSON.stringify(data));
+}
+
+// ============================================================
+// 状態
+// ============================================================
+let currentStreet = 'preflop';
+const boardCards = [null, null, null, null, null]; // レンジ表用
+const handCards  = [null, null];                   // 自分のハンド用
+const recHoleCards  = [null, null];                // 履歴記録用ホールカード
+const recBoardCards = [null, null, null, null, null]; // 履歴記録用ボード
+let recStreet = 'preflop';
+let recAction = null;
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+function cellKey(r1, r2, i, j) {
+  if (i === j) return r1 + r2;
+  if (i < j)  return r1 + r2 + 's';
+  return r2 + r1 + 'o';
+}
+
+function computeHandKey(c0, c1) {
+  const ri = RANKS.indexOf(c0.rank);
+  const rj = RANKS.indexOf(c1.rank);
+  if (ri === rj) return c0.rank + c1.rank;
+  const [high, low] = ri < rj ? [c0, c1] : [c1, c0];
+  return high.rank + low.rank + (high.suit === low.suit ? 's' : 'o');
+}
+
+// ストリート + ボードからキーを計算（null = ボード未入力）
+function streetBoardKey() {
+  if (currentStreet === 'preflop') return 'preflop';
+  const counts = { flop: 3, turn: 4, river: 5 };
+  const needed = counts[currentStreet];
+  const cards = boardCards.slice(0, needed);
+  if (cards.some(c => !c)) return null;
+  return currentStreet + ':' + cards.map(c => c.rank + c.suit).join('-');
+}
+
+function getHandData(sbKey, handKey) {
+  if (!sbKey) return { raise: 0, call: 0, fold: 100 };
+  return (loadRange()[sbKey] || {})[handKey] || { raise: 0, call: 0, fold: 100 };
+}
+
+function setHandData(sbKey, handKey, data) {
+  if (!sbKey) return;
+  const range = loadRange();
+  if (!range[sbKey]) range[sbKey] = {};
+  range[sbKey][handKey] = data;
+  saveRange(range);
+}
+
+function formatDatetime(dt) {
+  const d = new Date(dt);
+  const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hm  = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return `${ymd} ${hm}`;
+}
+
+const STREET_LABEL = { preflop: 'プリフロップ', flop: 'フロップ', turn: 'ターン', river: 'リバー' };
+const ACTION_LABEL = { fold: 'フォールド', call: 'コール', raise: 'レイズ' };
+
+// ============================================================
+// グリッド描画
+// ============================================================
+let selectedCell = null;
+let currentDisplayMode = 'range';
+
+// ============================================================
+// 表示モード
+// ============================================================
+function setDisplayMode(mode, btn) {
+  currentDisplayMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('range-legend').style.display = (mode === 'range' || mode === 'stats') ? '' : 'none';
+  document.getElementById('cat-legend').style.display   = (mode === 'category') ? 'flex' : 'none';
+  buildGrid();
+}
+
+function openModeHelp() { document.getElementById('mode-help-overlay').classList.add('open'); }
+function closeModeHelp(event) {
+  if (!event || event.target === document.getElementById('mode-help-overlay'))
+    document.getElementById('mode-help-overlay').classList.remove('open');
+}
+
+// ============================================================
+// ボードテクスチャ分析
+// ============================================================
+function analyzeBoardTexture(board) {
+  if (!board || board.length < 3) return [];
+  const badges = [];
+  const rankNums = {A:14,K:13,Q:12,J:11,T:10,9:9,8:8,7:7,6:6,5:5,4:4,3:3,2:2};
+
+  // スーツ
+  const suits = board.map(c => c.suit);
+  const suitUniq = new Set(suits);
+  if (suitUniq.size === 1)      badges.push({ label: 'モノトーン', cls: 'suit-mono' });
+  else if (suitUniq.size === 2) badges.push({ label: 'ツートーン', cls: 'suit-two' });
+  else                          badges.push({ label: 'レインボー', cls: 'suit-rainbow' });
+
+  // コネクテッドネス
+  const nums = board.map(c => rankNums[c.rank]).sort((a, b) => b - a);
+  const gaps = [];
+  for (let i = 0; i < nums.length - 1; i++) gaps.push(nums[i] - nums[i+1] - 1);
+  const maxGap = Math.max(...gaps);
+  if (maxGap <= 1)      badges.push({ label: 'コネクテッド', cls: 'conn-high' });
+  else if (maxGap <= 2) badges.push({ label: 'セミコネクテッド', cls: 'conn-mid' });
+  else                  badges.push({ label: 'アンコネクテッド', cls: '' });
+
+  // ペアボード
+  const rankSet = new Set(board.map(c => c.rank));
+  if (rankSet.size < board.length) badges.push({ label: 'ペアボード', cls: 'paired' });
+
+  // ハイカード
+  const ranks = board.map(c => c.rank);
+  if (ranks.includes('A'))      badges.push({ label: 'Aハイ', cls: 'high-card' });
+  else if (ranks.includes('K')) badges.push({ label: 'Kハイ', cls: 'high-card' });
+  else if (ranks.includes('Q')) badges.push({ label: 'Qハイ', cls: '' });
+
+  return badges;
+}
+
+function renderTextureBadges() {
+  const section = document.getElementById('texture-section');
+  if (currentStreet === 'preflop') { section.style.display = 'none'; return; }
+  const counts = { flop: 3, turn: 4, river: 5 };
+  const board = boardCards.slice(0, counts[currentStreet]).filter(Boolean);
+  if (board.length < counts[currentStreet]) { section.style.display = 'none'; return; }
+  const badges = analyzeBoardTexture(board);
+  section.style.display = 'block';
+  document.getElementById('texture-badges').innerHTML =
+    badges.map(b => `<span class="texture-badge ${b.cls}">${b.label}</span>`).join('');
+}
+
+function openTextureHelp() { document.getElementById('texture-help-overlay').classList.add('open'); }
+function closeTextureHelp(event) {
+  if (!event || event.target === document.getElementById('texture-help-overlay'))
+    document.getElementById('texture-help-overlay').classList.remove('open');
+}
+
+// ============================================================
+// カテゴリー分類
+// ============================================================
+function getHandCategory(r1, r2, i, j, board) {
+  const rankNums = {A:14,K:13,Q:12,J:11,T:10,9:9,8:8,7:7,6:6,5:5,4:4,3:3,2:2};
+  const boardRanks = board.map(c => c.rank);
+  const boardSuits = board.map(c => c.suit);
+  const boardRankSet = new Set(boardRanks);
+  const boardIndices = boardRanks.map(r => RANKS.indexOf(r)); // lower = higher rank
+  const isPair   = (i === j);
+  const isSuited = (i < j);
+
+  // セット / トリップス
+  if (isPair && boardRankSet.has(r1)) return 'set';
+
+  // ツーペア（ホールカード両方がボードと異なるランクでペア）
+  if (!isPair && boardRankSet.has(r1) && boardRankSet.has(r2)) return 'twopair';
+
+  // ポケットペア
+  if (isPair) {
+    const minBI = Math.min(...boardIndices); // smallest index = highest rank on board
+    const maxBI = Math.max(...boardIndices);
+    if (i < minBI) return 'overpair';   // pocket pair beats all board ranks
+    if (i > maxBI) return 'underpair';  // pocket pair below all board ranks
+    return 'midpair';                   // pocket pair trapped between board ranks
+  }
+
+  // ワンペア（ホールカード1枚がボードとヒット）
+  if (boardRankSet.has(r1) || boardRankSet.has(r2)) {
+    const pIdx = RANKS.indexOf(boardRankSet.has(r1) ? r1 : r2);
+    const sortedBI = [...boardIndices].sort((a, b) => a - b);
+    if (pIdx === sortedBI[0])                      return 'toppair';
+    if (pIdx === sortedBI[sortedBI.length - 1])    return 'botpair';
+    return 'midpair';
+  }
+
+  // フラッシュドロー（スーテッドハンドで、ボードに同スーツ2枚以上）
+  if (isSuited) {
+    const suitCnt = {};
+    boardSuits.forEach(s => suitCnt[s] = (suitCnt[s] || 0) + 1);
+    if (Object.values(suitCnt).some(c => c >= 2)) return 'flushdraw';
+  }
+
+  // ストレートドロー（ランク数値で判定）
+  const allNums = new Set([rankNums[r1], rankNums[r2], ...boardRanks.map(r => rankNums[r])]);
+  if (allNums.has(14)) allNums.add(1); // ホイール用
+  let maxInWindow = 0;
+  for (let low = 1; low <= 10; low++) {
+    const cnt = [low,low+1,low+2,low+3,low+4].filter(n => allNums.has(n)).length;
+    maxInWindow = Math.max(maxInWindow, cnt);
+  }
+  if (maxInWindow >= 4) return 'oesd';
+  if (maxInWindow >= 3) return 'gutshot';
+
+  // オーバーカード（両方ともボード最高ランクより高い）
+  const maxBoardNum = Math.max(...boardRanks.map(r => rankNums[r]));
+  if (rankNums[r1] > maxBoardNum && rankNums[r2] > maxBoardNum) return 'overcards';
+
+  return 'air';
+}
+
+// ============================================================
+// 統計集計
+// ============================================================
+function getHandStats(sbKey) {
+  const stats = {};
+  loadHistory().forEach(entry => {
+    const eKey = entry.street === 'preflop' ? 'preflop'
+      : (entry.street + ':' + (entry.board || []).map(c => c.rank + c.suit).join('-'));
+    if (eKey !== sbKey) return;
+    const hk = entry.handKey;
+    if (!stats[hk]) stats[hk] = { fold: 0, call: 0, raise: 0, total: 0 };
+    stats[hk][entry.action]++;
+    stats[hk].total++;
+  });
+  return stats;
+}
+
+function buildGrid() {
+  const sbKey = streetBoardKey();
+  const grid  = document.getElementById('hand-grid');
+  const hint  = document.getElementById('board-hint');
+
+  if (currentStreet !== 'preflop' && !sbKey) {
+    grid.innerHTML = '';
+    hint.style.display = 'block';
+    renderTextureBadges();
+    return;
+  }
+  hint.style.display = 'none';
+  renderTextureBadges();
+
+  // カテゴリーモード用ボード
+  const counts = { preflop: 0, flop: 3, turn: 4, river: 5 };
+  const boardCount = counts[currentStreet];
+  const board = boardCount > 0 ? boardCards.slice(0, boardCount).filter(Boolean) : [];
+
+  // カテゴリーモード：プリフロップ非対応
+  if (currentDisplayMode === 'category' && currentStreet === 'preflop') {
+    grid.innerHTML = '<div class="board-hint" style="grid-column:1/-1;">カテゴリーモードはフロップ以降で有効です</div>';
+    return;
+  }
+
+  const rangeData  = sbKey ? (loadRange()[sbKey] || {}) : {};
+  const statsData  = currentDisplayMode === 'stats' ? getHandStats(sbKey) : null;
+  grid.innerHTML   = '';
+
+  RANKS.forEach((r1, i) => {
+    RANKS.forEach((r2, j) => {
+      const key   = cellKey(r1, r2, i, j);
+      const label = i === j ? r1+r2 : (i < j ? r1+r2+'s' : r2+r1+'o');
+
+      const cell = document.createElement('div');
+      cell.className = 'hand-cell' + (i === j ? ' pair' : '');
+      cell.dataset.key = key;
+
+      if (currentDisplayMode === 'category' && board.length >= 3) {
+        // カテゴリーモード
+        const cat = getHandCategory(r1, r2, i, j, board);
+        cell.classList.add('cat-' + cat);
+
+      } else if (currentDisplayMode === 'stats') {
+        // 統計モード
+        const s = statsData && statsData[key];
+        if (!s || s.total === 0) {
+          cell.classList.add('no-data');
+          const bar = document.createElement('div');
+          bar.className = 'action-bar';
+          bar.innerHTML = '<div class="fold" style="flex:100"></div>';
+          cell.appendChild(bar);
+        } else {
+          const rp = Math.round(s.raise / s.total * 100);
+          const cp = Math.round(s.call  / s.total * 100);
+          const fp = 100 - rp - cp;
+          const bar = document.createElement('div');
+          bar.className = 'action-bar';
+          bar.innerHTML = `<div class="fold" style="flex:${fp}"></div>
+            <div class="call" style="flex:${cp}"></div>
+            <div class="raise" style="flex:${rp}"></div>`;
+          cell.appendChild(bar);
+          const cnt = document.createElement('div');
+          cnt.className = 'stats-count';
+          cnt.textContent = s.total;
+          cell.appendChild(cnt);
+        }
+
+      } else {
+        // レンジモード（デフォルト）
+        const data = rangeData[key] || { raise: 0, call: 0, fold: 100 };
+        const bar  = document.createElement('div');
+        bar.className = 'action-bar';
+        bar.innerHTML = `<div class="fold" style="flex:${data.fold}"></div>
+          <div class="call" style="flex:${data.call}"></div>
+          <div class="raise" style="flex:${data.raise}"></div>`;
+        cell.appendChild(bar);
+      }
+
+      const lbl = document.createElement('div');
+      lbl.className = 'hand-label';
+      lbl.textContent = label;
+      cell.appendChild(lbl);
+
+      cell.addEventListener('click', () => openRangeModal(key, label));
+      grid.appendChild(cell);
+    });
+  });
+
+  // ハイライト再適用
+  if (handCards[0] && handCards[1]) {
+    const key = computeHandKey(handCards[0], handCards[1]);
+    highlightHandInGrid(key);
+  }
+}
+
+// ============================================================
+// ページ / ストリート切替
+// ============================================================
+function showPage(id, btn) {
+  closePicker();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'history') renderHistory();
+}
+
+function showStreet(street, btn) {
+  closePicker();
+  document.querySelectorAll('.street-tabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentStreet = street;
+
+  const boardSec = document.getElementById('board-section');
+  const counts = { preflop: 0, flop: 3, turn: 4, river: 5 };
+  const count = counts[street];
+
+  if (count === 0) {
+    boardSec.style.display = 'none';
+  } else {
+    boardSec.style.display = 'block';
+    for (let i = 0; i < 5; i++) {
+      document.getElementById('slot-' + i).style.display = i < count ? '' : 'none';
+    }
+  }
+
+  buildGrid();
+}
+
+// ============================================================
+// カードピッカー（ボトムシート・全コンテキスト共通）
+// ============================================================
+// context: 'board' | 'hand' | 'rec-hand' | 'rec-board'
+let currentPicker = null; // { context, slot, rank }
+
+// ランクボタンを生成（初回のみ）
+(function() {
+  const grid = document.getElementById('rank-grid');
+  RANKS.forEach(r => {
+    const btn = document.createElement('button');
+    btn.className = 'rank-btn';
+    btn.textContent = r;
+    btn.dataset.rank = r;
+    btn.onclick = () => selectRankFor(r);
+    grid.appendChild(btn);
+  });
+})();
+
+function getCardsForContext(context) {
+  if (context === 'board')     return boardCards;
+  if (context === 'hand')      return handCards;
+  if (context === 'rec-hand')  return recHoleCards;
+  if (context === 'rec-board') return recBoardCards;
+  return [];
+}
+
+function openPickerFor(context, slotIdx) {
+  // 同じスロットの再タップで閉じる
+  if (currentPicker?.context === context &&
+      currentPicker?.slot === slotIdx &&
+      document.getElementById('picker-sheet').classList.contains('open')) {
+    closePicker();
+    return;
+  }
+
+  const cards = getCardsForContext(context);
+  currentPicker = { context, slot: slotIdx, rank: cards[slotIdx]?.rank ?? null };
+
+  // アクティブスロットのハイライト
+  document.querySelectorAll('.card-slot').forEach(s => s.classList.remove('active-slot'));
+  const prefix = { board: 'slot-', hand: 'hand-slot-', 'rec-hand': 'rhand-slot-', 'rec-board': 'rslot-' };
+  document.getElementById(prefix[context] + slotIdx)?.classList.add('active-slot');
+
+  // ランクボタンの選択状態
+  document.querySelectorAll('#rank-grid .rank-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.rank === currentPicker.rank);
+  });
+
+  refreshSuitButtons();
+  updatePickerLabel();
+
+  document.getElementById('picker-overlay').classList.add('open');
+  document.getElementById('picker-sheet').classList.add('open');
+}
+
+function closePicker() {
+  if (!currentPicker) return;
+  currentPicker = null;
+  document.getElementById('picker-overlay').classList.remove('open');
+  document.getElementById('picker-sheet').classList.remove('open');
+  document.querySelectorAll('.card-slot').forEach(s => s.classList.remove('active-slot'));
+}
+
+function selectRankFor(rank) {
+  if (!currentPicker) return;
+  currentPicker.rank = rank;
+  document.querySelectorAll('#rank-grid .rank-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.rank === rank);
+  });
+  refreshSuitButtons();
+  updatePickerLabel();
+}
+
+function selectSuitFor(suit) {
+  if (!currentPicker || currentPicker.rank === null) return;
+  const { context, slot, rank } = currentPicker;
+  getCardsForContext(context)[slot] = { rank, suit };
+
+  if (context === 'board') {
+    renderBoardSlot(slot);
+    buildGrid(); // ボード変更でグリッド再描画（内部でrenderTextureBadgesも呼ばれる）
+  } else if (context === 'hand') {
+    renderHandSlot(slot);
+    updateHandName();
+  } else if (context === 'rec-hand') {
+    renderRecHandSlot(slot);
+  } else if (context === 'rec-board') {
+    renderRecBoardSlot(slot);
+  }
+
+  closePicker();
+}
+
+function refreshSuitButtons() {
+  if (!currentPicker) return;
+  const { context, slot, rank } = currentPicker;
+  const myCards = getCardsForContext(context);
+
+  // 使用済みカードを全コンテキストから収集（自スロット除外）
+  const allUsed = [
+    ...boardCards.map((c,i)    => (context==='board'    && i===slot) ? null : c),
+    ...handCards.map((c,i)     => (context==='hand'     && i===slot) ? null : c),
+    ...recHoleCards.map((c,i)  => (context==='rec-hand' && i===slot) ? null : c),
+    ...recBoardCards.map((c,i) => (context==='rec-board'&& i===slot) ? null : c),
+  ].filter(Boolean);
+  const used = new Set(allUsed.map(c => c.rank + c.suit));
+
+  document.querySelectorAll('#suit-row .suit-btn').forEach(btn => {
+    btn.classList.toggle('disabled', used.has((rank ?? '') + btn.dataset.suit));
+    btn.classList.toggle('selected',
+      rank !== null &&
+      myCards[slot]?.rank === rank &&
+      myCards[slot]?.suit === btn.dataset.suit
+    );
+  });
+}
+
+function updatePickerLabel() {
+  if (!currentPicker) return;
+  document.getElementById('picker-label').textContent =
+    currentPicker.rank === null ? 'ランクを選択' : `${currentPicker.rank} — スーツを選択`;
+}
+
+// ============================================================
+// スロット描画
+// ============================================================
+function renderCardSlot(el, card) {
+  if (!card) {
+    el.innerHTML = '<span class="slot-empty">＋</span>';
+    el.classList.remove('filled', 'red', 'black');
+    return;
+  }
+  const isRed = card.suit === '♥' || card.suit === '♦';
+  el.classList.add('filled');
+  el.classList.toggle('red', isRed);
+  el.classList.toggle('black', !isRed);
+  el.innerHTML = `<span class="slot-rank">${card.rank}</span><span class="slot-suit">${card.suit}</span>`;
+}
+function renderBoardSlot(i)    { renderCardSlot(document.getElementById('slot-'+i),       boardCards[i]); }
+function renderHandSlot(i)     { renderCardSlot(document.getElementById('hand-slot-'+i),  handCards[i]); }
+function renderRecHandSlot(i)  { renderCardSlot(document.getElementById('rhand-slot-'+i), recHoleCards[i]); }
+function renderRecBoardSlot(i) { renderCardSlot(document.getElementById('rslot-'+i),      recBoardCards[i]); }
+
+// ============================================================
+// 自分のハンド名 & グリッドハイライト
+// ============================================================
+function updateHandName() {
+  const badge       = document.getElementById('hand-name-badge');
+  const clearBtn    = document.getElementById('btn-clear-hand');
+  const inlineRec   = document.getElementById('inline-record');
+  const [c0, c1]    = handCards;
+
+  if (!c0 || !c1) {
+    badge.textContent = '— ';
+    badge.classList.add('empty');
+    clearBtn.style.display = 'none';
+    inlineRec.classList.remove('visible');
+    clearGridHighlight();
+    return;
+  }
+  const key = computeHandKey(c0, c1);
+  badge.textContent = key;
+  badge.classList.remove('empty');
+  clearBtn.style.display = '';
+  inlineRec.classList.add('visible');
+  highlightHandInGrid(key);
+}
+
+function recordInline(action) {
+  const [c0, c1] = handCards;
+  if (!c0 || !c1) return;
+
+  const counts     = { preflop: 0, flop: 3, turn: 4, river: 5 };
+  const boardCount = counts[currentStreet];
+  const board      = boardCards.slice(0, boardCount).filter(Boolean);
+
+  // フロップ以降はボードが揃っていないと記録しない
+  if (boardCount > 0 && board.length < boardCount) {
+    showToast('ボードカードを入力してください');
+    return;
+  }
+
+  const handKey = computeHandKey(c0, c1);
+  const entry   = {
+    id:        Date.now().toString(),
+    datetime:  new Date().toISOString(),
+    street:    currentStreet,
+    handKey,
+    holeCards: [{ ...c0 }, { ...c1 }],
+    action,
+    board:     board.map(c => ({ ...c })),
+    position:  presetPosition,
+  };
+
+  const history = loadHistory();
+  history.unshift(entry);
+  saveHistory(history);
+
+  const actionLabel = { fold: 'フォールド', call: 'コール', raise: 'レイズ' };
+  showToast(`${handKey} / ${actionLabel[action]} を記録しました`);
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+function highlightHandInGrid(key) {
+  clearGridHighlight();
+  const cell = document.querySelector(`[data-key="${key}"]`);
+  if (cell) {
+    cell.classList.add('hand-highlight');
+    cell.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function clearGridHighlight() {
+  document.querySelectorAll('.hand-cell.hand-highlight')
+    .forEach(c => c.classList.remove('hand-highlight'));
+}
+
+function clearHand() {
+  handCards[0] = null;
+  handCards[1] = null;
+  renderHandSlot(0);
+  renderHandSlot(1);
+  updateHandName();
+  closePicker();
+}
+
+// ============================================================
+// レンジ編集モーダル
+// ============================================================
+function openRangeModal(key, label) {
+  closePicker();
+  selectedCell = key;
+  const sbKey = streetBoardKey();
+  const data  = getHandData(sbKey, key);
+
+  document.getElementById('modal-hand-name').textContent = label;
+  document.getElementById('raise-slider').value = data.raise;
+  document.getElementById('call-slider').value  = data.call;
+  document.getElementById('fold-slider').value  = data.fold;
+  document.getElementById('raise-val').textContent = data.raise;
+  document.getElementById('call-val').textContent  = data.call;
+  document.getElementById('fold-val').textContent  = data.fold;
+  updatePreview(data.raise, data.call, data.fold);
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeRangeModal(event) {
+  if (!event || event.target === document.getElementById('modal')) {
+    document.getElementById('modal').classList.remove('open');
+  }
+}
+
+function updateSliders(changed) {
+  let r = +document.getElementById('raise-slider').value;
+  let c = +document.getElementById('call-slider').value;
+  let f = +document.getElementById('fold-slider').value;
+
+  const diff = 100 - (r + c + f);
+  if (diff !== 0) {
+    if (changed === 'raise') {
+      if (diff > 0) { c += diff; } else { c = Math.max(0, c + diff); f = 100 - r - c; }
+    } else if (changed === 'call') {
+      if (diff > 0) { f += diff; } else { f = Math.max(0, f + diff); r = 100 - c - f; }
+    } else {
+      if (diff > 0) { r += diff; } else { r = Math.max(0, r + diff); c = 100 - f - r; }
+    }
+    r = Math.max(0, Math.min(100, r));
+    c = Math.max(0, Math.min(100, c));
+    f = Math.max(0, Math.min(100, f));
+    document.getElementById('raise-slider').value = r;
+    document.getElementById('call-slider').value  = c;
+    document.getElementById('fold-slider').value  = f;
+  }
+
+  document.getElementById('raise-val').textContent = r;
+  document.getElementById('call-val').textContent  = c;
+  document.getElementById('fold-val').textContent  = f;
+  updatePreview(r, c, f);
+}
+
+function updatePreview(r, c, f) {
+  const p = document.getElementById('action-preview');
+  p.children[0].style.flex = r;
+  p.children[1].style.flex = c;
+  p.children[2].style.flex = f;
+}
+
+function saveRangeHand() {
+  const r = +document.getElementById('raise-slider').value;
+  const c = +document.getElementById('call-slider').value;
+  const f = +document.getElementById('fold-slider').value;
+  const sbKey = streetBoardKey();
+  if (selectedCell && sbKey) {
+    setHandData(sbKey, selectedCell, { raise: r, call: c, fold: f });
+    buildGrid();
+  }
+  document.getElementById('modal').classList.remove('open');
+}
+
+// ============================================================
+// 履歴記録モーダル
+// ============================================================
+function openRecModal() {
+  // 記録状態を初期化
+  recStreet = 'preflop';
+  recAction = null;
+  recHoleCards[0] = recHoleCards[1] = null;
+  for (let i = 0; i < 5; i++) recBoardCards[i] = null;
+
+  // UI リセット
+  document.querySelectorAll('.rec-street-tabs button').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('selected'));
+  for (let i = 0; i < 2; i++) renderRecHandSlot(i);
+  for (let i = 0; i < 5; i++) renderRecBoardSlot(i);
+  document.getElementById('rec-board-section').style.display = 'none';
+
+  document.getElementById('rec-modal').classList.add('open');
+}
+
+function closeRecModal(event) {
+  if (!event || event.target === document.getElementById('rec-modal')) {
+    closePicker();
+    document.getElementById('rec-modal').classList.remove('open');
+  }
+}
+
+function setRecStreet(street, btn) {
+  recStreet = street;
+  document.querySelectorAll('.rec-street-tabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const counts = { preflop: 0, flop: 3, turn: 4, river: 5 };
+  const count = counts[street];
+  const sec = document.getElementById('rec-board-section');
+
+  if (count === 0) {
+    sec.style.display = 'none';
+  } else {
+    sec.style.display = 'block';
+    for (let i = 0; i < 5; i++) {
+      document.getElementById('rslot-' + i).style.display = i < count ? '' : 'none';
+    }
+  }
+}
+
+function selectRecAction(action, btn) {
+  recAction = action;
+  document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function saveRecord() {
+  // バリデーション
+  if (!recHoleCards[0] || !recHoleCards[1]) {
+    alert('ホールカードを入力してください');
+    return;
+  }
+  if (!recAction) {
+    alert('アクションを選択してください');
+    return;
+  }
+  const counts = { preflop: 0, flop: 3, turn: 4, river: 5 };
+  const boardNeeded = counts[recStreet];
+  if (boardNeeded > 0) {
+    for (let i = 0; i < boardNeeded; i++) {
+      if (!recBoardCards[i]) { alert('ボードカードをすべて入力してください'); return; }
+    }
+  }
+
+  const handKey = computeHandKey(recHoleCards[0], recHoleCards[1]);
+  const entry = {
+    id:        Date.now().toString(),
+    datetime:  new Date().toISOString(),
+    street:    recStreet,
+    handKey,
+    holeCards: [{ ...recHoleCards[0] }, { ...recHoleCards[1] }],
+    action:    recAction,
+    board:     recBoardCards.slice(0, boardNeeded).map(c => ({ ...c })),
+  };
+
+  const history = loadHistory();
+  history.unshift(entry); // 新しいものを先頭に
+  saveHistory(history);
+
+  closePicker();
+  document.getElementById('rec-modal').classList.remove('open');
+  renderHistory();
+  // 履歴ページへ切替
+  showPage('history', document.querySelectorAll('nav button')[1]);
+}
+
+// ============================================================
+// 履歴一覧レンダリング
+// ============================================================
+function renderHistory() {
+  const list    = document.getElementById('history-list');
+  const history = loadHistory();
+
+  if (history.length === 0) {
+    list.innerHTML = '<div class="empty-state">記録がありません</div>';
+    return;
+  }
+
+  list.innerHTML = history.map(entry => {
+    const isRedCard = c => c.suit === '♥' || c.suit === '♦';
+    const holeHtml = entry.holeCards.map(c =>
+      `<span class="mini-card${isRedCard(c) ? ' red' : ''}">${c.rank}${c.suit}</span>`
+    ).join('');
+    const boardHtml = entry.board.map(c =>
+      `<span class="mini-card board${isRedCard(c) ? ' red' : ''}">${c.rank}${c.suit}</span>`
+    ).join('');
+
+    return `
+      <div class="history-card ${entry.action}">
+        <div class="history-card-top">
+          <span class="history-hand">${entry.handKey}</span>
+          <span>
+            <span class="history-action ${entry.action}">${ACTION_LABEL[entry.action]}</span>
+            <button class="btn-del-entry" onclick="deleteRecord('${entry.id}')" title="削除">×</button>
+          </span>
+        </div>
+        <div class="history-meta">${STREET_LABEL[entry.street]}${entry.position ? ' / ' + entry.position : ''} &nbsp;·&nbsp; ${formatDatetime(entry.datetime)}</div>
+        <div class="history-cards-row">
+          ${holeHtml}
+          ${boardHtml ? `<span style="color:#444;margin:0 2px;">|</span>${boardHtml}` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function deleteRecord(id) {
+  if (!confirm('この記録を削除しますか？')) return;
+  const history = loadHistory().filter(e => e.id !== id);
+  saveHistory(history);
+  renderHistory();
+}
+
+// ============================================================
+// 設定
+// ============================================================
+function exportData() {
+  const data = {
+    range:   loadRange(),
+    history: loadHistory(),
+    exportedAt: new Date().toISOString(),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `pokerrng_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!confirm('既存のデータをすべて上書きします。よろしいですか？')) return;
+      if (data.range)   saveRange(data.range);
+      if (data.history) saveHistory(data.history);
+      buildGrid();
+      renderHistory();
+      alert('インポートしました');
+    } catch {
+      alert('ファイルの読み込みに失敗しました');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // 同ファイル再選択を可能に
+}
+
+function clearAllData() {
+  if (!confirm('レンジデータと履歴をすべて削除します。元に戻せません。\n本当に削除しますか？')) return;
+  localStorage.removeItem(STORAGE_RANGE);
+  localStorage.removeItem(STORAGE_HISTORY);
+  buildGrid();
+  renderHistory();
+  alert('削除しました');
+}
+
+// ============================================================
+// プリフロップ プリセット
+// ============================================================
+
+// 全169ハンドをデフォルトfoldで初期化し、specsでraise%を設定
+// specs = [{pct: number, hands: [handKey, ...]}, ...]
+function buildPreset(specs) {
+  const all = {};
+  RANKS.forEach((r1, i) => RANKS.forEach((r2, j) => {
+    const k = i === j ? r1+r2 : (i < j ? r1+r2+'s' : r2+r1+'o');
+    all[k] = 0;
+  }));
+  specs.forEach(({ pct, hands }) => hands.forEach(h => { if (h in all) all[h] = pct; }));
+  const result = {};
+  Object.entries(all).forEach(([k, r]) => result[k] = { raise: r, call: 0, fold: 100 - r });
+  return result;
+}
+
+const PRESETS = {
+  // ===== TAG =====
+  // TAG は純粋戦略（raise 100% or fold 100%）。ポジションが広がるにつれてハンドを追加。
+  TAG: {
+    UTG: buildPreset([{ pct: 100, hands: [
+      'AA','KK','QQ','JJ','TT','99','88',
+      'AKs','AQs','AJs','ATs','KQs','KJs','QJs','JTs',
+      'AKo','AQo','AJo','KQo',
+    ]}]),
+    MP: buildPreset([{ pct: 100, hands: [
+      'AA','KK','QQ','JJ','TT','99','88','77',
+      'AKs','AQs','AJs','ATs','A9s','A8s',
+      'KQs','KJs','KTs','QJs','QTs','JTs','T9s','98s',
+      'AKo','AQo','AJo','ATo','KQo','KJo',
+    ]}]),
+    CO: buildPreset([{ pct: 100, hands: [
+      'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+      'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+      'KQs','KJs','KTs','K9s',
+      'QJs','QTs','Q9s',
+      'JTs','J9s',
+      'T9s','T8s',
+      '98s','97s','87s','76s',
+      'AKo','AQo','AJo','ATo','KQo','KJo','QJo','JTo',
+    ]}]),
+    BTN: buildPreset([{ pct: 100, hands: [
+      'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+      'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+      'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','K4s','K3s','K2s',
+      'QJs','QTs','Q9s','Q8s','Q7s','Q6s',
+      'JTs','J9s','J8s','J7s',
+      'T9s','T8s','T7s',
+      '98s','97s','96s','87s','86s','76s','75s','65s','64s','54s',
+      'AKo','AQo','AJo','ATo','KQo','KJo','KTo','QJo','QTo','JTo','T9o','98o','87o',
+    ]}]),
+    SB: buildPreset([{ pct: 100, hands: [
+      'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+      'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s',
+      'KQs','KJs','KTs','K9s','K8s',
+      'QJs','QTs','Q9s','Q8s',
+      'JTs','J9s','J8s',
+      'T9s','T8s',
+      '98s','97s','87s','86s','76s','75s','65s','54s',
+      'AKo','AQo','AJo','ATo','KQo','KJo','KTo','QJo','JTo',
+    ]}]),
+  },
+
+  // ===== GTO =====
+  // GTO は混合戦略あり（pct < 100 でランダマイズ）。
+  GTO: {
+    UTG: buildPreset([
+      { pct: 100, hands: [
+        'AA','KK','QQ','JJ','TT','99','88','77',
+        'AKs','AQs','AJs','ATs','KQs','KJs','QJs','JTs',
+        'AKo','AQo',
+      ]},
+      { pct: 67, hands: ['AJo','KQo','A9s','KTs'] },
+      { pct: 33, hands: ['66','QTs','T9s','98s','87s'] },
+    ]),
+    MP: buildPreset([
+      { pct: 100, hands: [
+        'AA','KK','QQ','JJ','TT','99','88','77','66',
+        'AKs','AQs','AJs','ATs','A9s','KQs','KJs','KTs','QJs','QTs','JTs','T9s',
+        'AKo','AQo','AJo','KQo',
+      ]},
+      { pct: 67, hands: ['55','A8s','K9s','98s','KJo'] },
+      { pct: 50, hands: ['J9s','ATo','87s'] },
+      { pct: 33, hands: ['76s','QJo'] },
+    ]),
+    CO: buildPreset([
+      { pct: 100, hands: [
+        'AA','KK','QQ','JJ','TT','99','88','77','66','55',
+        'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+        'KQs','KJs','KTs','K9s',
+        'QJs','QTs','Q9s',
+        'JTs','J9s','T9s','T8s','98s','87s',
+        'AKo','AQo','AJo','ATo','KQo','KJo','QJo',
+      ]},
+      { pct: 67, hands: ['44','33','A4s','K8s','J8s','T7s','97s','76s','65s','JTo'] },
+      { pct: 50, hands: ['22','A3s','K7s','Q8s','96s','75s'] },
+      { pct: 33, hands: ['A2s','K6s','86s','54s'] },
+    ]),
+    BTN: buildPreset([
+      { pct: 100, hands: [
+        'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+        'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+        'KQs','KJs','KTs','K9s','K8s','K7s','K6s',
+        'QJs','QTs','Q9s','Q8s','Q7s',
+        'JTs','J9s','J8s','J7s',
+        'T9s','T8s','T7s',
+        '98s','97s','96s','87s','86s','76s','75s','65s','64s','54s',
+        'AKo','AQo','AJo','ATo','KQo','KJo','KTo','QJo','QTo','JTo','T9o','98o',
+      ]},
+      { pct: 67, hands: ['K5s','K4s','K3s','K2s','Q6s','Q5s','J6s','T6s','95s','85s','74s','63s','53s','43s','87o','76o'] },
+      { pct: 50, hands: ['Q4s','Q3s','Q2s','J5s','J4s','96o','86o','75o'] },
+      { pct: 33, hands: ['J3s','J2s','T5s','T4s'] },
+    ]),
+    SB: buildPreset([
+      { pct: 100, hands: [
+        'AA','KK','QQ','JJ','TT','99','88','77','66','55','44',
+        'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s',
+        'KQs','KJs','KTs','K9s','K8s','K7s',
+        'QJs','QTs','Q9s','Q8s',
+        'JTs','J9s','J8s',
+        'T9s','T8s','T7s',
+        '98s','97s','87s','86s','76s','75s','65s','54s',
+        'AKo','AQo','AJo','ATo','KQo','KJo','KTo','QJo','JTo',
+      ]},
+      { pct: 67, hands: ['33','22','A2s','K6s','K5s','Q7s','J7s','96s','T9o','98o','87o'] },
+      { pct: 50, hands: ['K4s','K3s','K2s','Q6s','Q5s','T6s','97s','86s','74s','64s','53s','QTo'] },
+      { pct: 33, hands: ['J6s','J5s','95s','85s'] },
+    ]),
+  },
+};
+
+// プリセット状態（デフォルトGTO、ポジション未選択）
+let presetStrategy = 'GTO';
+let presetPosition = null; // null = 未選択
+
+function selectStrategy(strategy, btn) {
+  presetStrategy = strategy;
+  document.querySelectorAll('#preset-strategy button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // ポジション選択済みなら戦略変更で即時再適用
+  if (presetPosition) applyPresetSilent();
+}
+
+function selectPosition(position, btn) {
+  presetPosition = position;
+  document.querySelectorAll('#position-selector button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyPresetSilent();
+}
+
+function openPositionHelp() {
+  document.getElementById('position-help-overlay').classList.add('open');
+}
+function closePositionHelp(event) {
+  if (!event || event.target === document.getElementById('position-help-overlay')) {
+    document.getElementById('position-help-overlay').classList.remove('open');
+  }
+}
+
+function applyPresetSilent() {
+  if (!presetPosition) return;
+  const range = loadRange();
+  range['preflop'] = PRESETS[presetStrategy][presetPosition];
+  saveRange(range);
+  if (currentStreet === 'preflop') buildGrid();
+}
+
+// ============================================================
+// 初期化
+// ============================================================
+buildGrid();
+renderHistory();
+</script>
+</body>
+</html>
